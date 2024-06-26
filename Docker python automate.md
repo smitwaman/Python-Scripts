@@ -1,43 +1,53 @@
 Here is a Python code snippet that automates the process you described using the `pygithub` library for GitHub API interaction and the `docker` library for Docker manipulation:
 ```python
+
 import os
-import datetime
-from github import Github
-import docker
+import subprocess
+import requests
 
-# Input from user
-github_username = input("Enter your GitHub username: ")
-github_token = input("Enter your GitHub token: ")
-repo_url = input("Enter the GitHub repository URL: ")
-docker_username = input("Enter your Docker Hub username: ")
-docker_token = input("Enter your Docker Hub token: ")
+def main():
+    # Get GitHub repository details from user
+    github_username = input("Enter your GitHub username: ")
+    github_repo_name = input("Enter your GitHub repository name: ")
+    github_token = input("Enter your GitHub token: ")
 
-# Authenticate to GitHub
-g = Github(github_username, github_token)
-repo = g.get_repo(repo_url)
+    # Get Docker Hub details from user
+    docker_hub_username = input("Enter your Docker Hub username: ")
+    docker_hub_password = input("Enter your Docker Hub password: ")
 
-# Clone the GitHub repository
-os.system(f"git clone https://{github_username}:{github_token}@github.com/{repo.full_name}.git")
+    # Get port number from user
+    port_number = input("Enter the port number your container will listen on: ")
 
-# Build Docker image
-client = docker.from_env()
-image_tag = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-image, _ = client.images.build(path=".", tag=f"{docker_username}/myimage:{image_tag}")
+    # Clone the GitHub repository
+    print("Cloning GitHub repository...")
+    subprocess.run(["git", "clone", f"https://{github_token}@github.com/{github_username}/{github_repo_name}.git"])
 
-# Push the Docker image to Docker Hub
-client.login(username=docker_username, password=docker_token)
-client.images.push(repository=f"{docker_username}/myimage", tag=image_tag)
+    # Change into the cloned repository directory
+    os.chdir(github_repo_name)
 
-# Pull the Docker image
-client.images.pull(repository=f"{docker_username}/myimage", tag=image_tag)
+    # Build the Docker image
+    print("Building Docker image...")
+    subprocess.run(["docker", "build", "-t", f"{docker_hub_username}/{github_repo_name}", "."])
 
-# Run the Docker image
-container = client.containers.run(image=f"{docker_username}/myimage:{image_tag}", detach=True, ports={'80/tcp': 8080})
+    # Login to Docker Hub
+    print("Logging in to Docker Hub...")
+    subprocess.run(["docker", "login", "-u", docker_hub_username, "-p", docker_hub_password])
 
-# Display URL for accessing the container from a browser
-container_id = container.id
-container.inspect()
-print(f"Access container from browser: http://localhost:{container.attrs['NetworkSettings']['Ports']['80/tcp'][0]['HostPort']}")
+    # Push the Docker image to Docker Hub
+    print("Pushing Docker image to Docker Hub...")
+    subprocess.run(["docker", "push", f"{docker_hub_username}/{github_repo_name}"])
 
+    # Run the Docker container
+    print("Running Docker container...")
+    container_id = subprocess.run(["docker", "run", "-d", "-p", f"{port_number}:80", f"{docker_hub_username}/{github_repo_name}"], capture_output=True).stdout.decode("utf-8").strip()
+
+    # Get the container IP address
+    container_ip = subprocess.run(["docker", "inspect", "-f", "{{.NetworkSettings.IPAddress}}", container_id], capture_output=True).stdout.decode("utf-8").strip()
+
+    # Print the URL to access the container
+    print(f"Container is running at http://{container_ip}:{port_number}")
+
+if __name__ == "__main__":
+    main()
 ```
 Please ensure you have installed the `pygithub` and `docker` libraries before running this code.
